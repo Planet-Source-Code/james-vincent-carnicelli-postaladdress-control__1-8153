@@ -1,0 +1,405 @@
+<HTML>
+<HEAD>
+<TITLE>PostalAddress Control Help</TITLE>
+</HEAD>
+<BODY BGCOLOR="#FFFFFF"><FONT FACE="Arial">
+
+
+<CENTER>
+<FONT SIZE="+3" COLOR="#000099"><B> PostalAddress Control 1.1 </B></FONT>
+<BR><FONT SIZE="+1"> Reference Documentation </FONT>
+<HR>
+</CENTER>
+
+
+<P><FONT SIZE="+2" COLOR="#000099"><B> Table of Contents </B></FONT>
+
+<UL>
+  <LI><A HREF="#introduction"> Introduction</A>
+  <LI><A HREF="#application"> Applying this Control</A>
+  <LI><A HREF="#declarations"> Public Declarations</A>
+  <LI><A HREF="#properties"> Public Properties</A>
+  <LI><A HREF="#methods"> Public Methods</A>
+  <LI><A HREF="#events"> Public Events</A>
+  <LI><A HREF="#revisions"> Revision History</A>
+  <LI><A HREF="#credits"> Credits</A>
+</UL>
+
+
+<A NAME="introduction">
+<P><FONT SIZE="+2" COLOR="#000099"><B> Introduction </B></FONT>
+
+<BR>The primary purpose of this control is to allow users to view and enter U.S. postal addresses.  This document provides help for programmers on how to use the control in user applications.  It is directed at VB programmers, but the control can be compiled to an OCX and used with other systems that support OCXs.
+
+<P>Many business applications require users to enter postal addresses.  These addresses are typically stored in databases.  Some database tables are designed to store the address in separate fields: street address, lines 1 and 2, city, state, zip code, and zip code extension.  Other tables are designed to store the entire address as one field.  To make processing simple and consistent, programmers building a data entry form for the separate-field approach typically place one text box for each of the separate database fields.  Unfortunately, this is cumbersome for most users, who would generally rather have a single, multi-line text box.  It also tends to take up much more space on a form than a single text box with the whole address would.
+
+<P><IMG SRC="screen_shot.gif" ALIGN="RIGHT">
+The PostalAddress control does just that.  You can include this control (see the screen shot to the right) on a form just as you would a single multi-line text box.  They look and act almost identically.  But your user code will never have to read from the text box to discover the discrete parts of the address.  The control offers these values, which it parses out for you, as public properties.
+
+<P>Because this control allows users to enter addresses free-form, it's necessary for this control to not only parse out the fields, but also to validate what the user has typed.  It does this and provides useful error messages to the user code.  This validation and parsing happens with every keystroke in and change to the text box, but is fast enough to be unnoticeable by your users.  The control is forgiving of a number of common entry mistakes and even cleans up after them when the user leaves the control.
+
+<P>In addition to checking the address entered for basic formatting validity, this control maintains a code-alterable list of state abbreviations and names for validation and lookup.  This list comes from the U.S. Post Office's web site (<A HREF="http://www.usps.gov">http://www.usps.gov</A>).  You could even enter a state's name in this control instead of its abbreviation and it will do a look-up for you.
+
+<P>It's worth pointing out that beyond the state abbreviations, this control does not "validate" the data in the sense of confirming that the address entered really exists.  It doesn't even so much as confirm that the city is a real one.  To do this more complete kind of validation requires massive amounts of constantly changing data, and few applications demand that level of validation.
+
+<P>This control does not depend on any modules or libraries beyond the one that comes standard with Visual Basic.
+
+
+<A NAME="application">
+<P><FONT SIZE="+2" COLOR="#000099"><B> Applying this Control </B></FONT>
+<BR>Here is some help for the programmer on how to use this control in his own applications.  For a demonstration, <A HREF="PostalAddress_Demo.exe">execute the demo program<A>.  You can view and play with the source code for this demo in the <TT>PostalAddress_Demo.vbp</TT> VB 6 project.  For discussion here, let's assume we have a form called <TT>Form1</TT> with one PostalAddress control called <TT>Address1</TT> on it.
+
+<P>Let's start with a typical usage: a database table data editor.  To populate <TT>Address1</TT> with the contents of, say, an ADO recordset named <TT>rs</TT>, you might use code similar to the following:
+
+<UL><FONT COLOR="#006600">
+<PRE>Address1.StreetLine1 = rs("AddrStreet1")
+Address1.StreetLine2 = rs("AddrStreet2")
+Address1.City = rs("AddrCity")
+Address1.State = rs("AddrState")
+Address1.Zip = rs("AddrZip")
+Address1.Zip4 = rs("AddrZipExten")</PRE>
+</FONT></UL>
+
+<P>Each of these lines will cause the control's display to be updated with the new total address (i.e., the value <TT>Address1.Address</TT> returns).  You can do the reverse (e.g., <TT><FONT COLOR="#006600">rs("AddrCity") = Address1.City</FONT></TT> ) to get the data from the control back into your recordset.
+
+<P>Our application would be pretty bad without some validation, so let's consider that.  There are three basic times when validation would matter: when the user types a character in or does anything to alter the text in the control, when the user leaves the control, and during later processing of the containing form.  The first two correspond to the <TT>Change</TT> and <TT>LostFocus</TT> events the control raises, respectively.  For our purposes, let's consider the second case.  Here's a sample:
+
+<UL><FONT COLOR="#006600">
+<PRE>Private Sub Address1_LostFocus()
+    If Not Address1.IsValid Then
+        MsgBox "Invalid address: " & Address1.ValidationError
+        Address1.SetFocus
+        Exit Sub
+    End If
+    If Len(Address1.City) > 20 Then  
+        MsgBox "Invalid address: City may not be more than 20 characters"
+        Address1.SetFocus
+        Exit Sub
+    End If
+End Sub</PRE>
+</FONT></UL>
+
+<P>The first condition tests to make sure the control is happy that the address is valid.  The second condition tests to make sure the address meets the particular business requirements of this application -- in this case, that the city is not more than 20 characters long; a common sort of constraint for databases.
+
+<P>Many applications these days will allow you to enter a zip code and will then automatically return a city and state.  While the PostalAddress control doesn't offer this feature directly, you can add it using your own lookup routine.  Consider the following example:
+
+<UL><FONT COLOR="#006600">
+<PRE>Private Sub Address1_LostFocus()
+    Dim City As String, State As String
+    If Address1.Zip <> "" And Address1.City = "" And Address1.State = "" Then
+        'Our handy dandy lookup routine
+        If GetCityState(Address.Zip, City, State) Then
+            Address1.City = City
+            Address1.State = State
+        Else
+            MsgBox "Invalid address: No such zip code"
+            Address1.SetFocus
+            Exit Sub
+        End If
+    End If
+End Sub</PRE>
+</FONT></UL>
+
+<P>This should work, provided the last line of the address entered is just a zip code.  Be aware, though, that that address, without the city and state, will be considered by the control to be invalid.  All else being correct, it should be valid once <TT>.City</TT> and <TT>.State</TT> are set by your code.  It would be prudent to check <TT>.IsValid</TT> some time after the city and state are set.
+
+<P>Although the PostalAddress control has its own user interface, this does not preclude it from being used without one as an ordinary class.  For example, if you have a grid control or some other control that has its own data entry user interface, it could be difficult to overlay this otherwise ordinary text box onto that control and deal with the complexities of that.  For our purposes, let's say we have a multi-line TextBox control for address entry called <TT>Text1</TT> and <TT>Address1</TT> is hidden.  Here's how we might make use of the PostalAddress control for this:
+
+<UL><FONT COLOR="#006600">
+<PRE>Private Sub Text1_LostFocus()
+    Address1.Address = Text1.Text
+    If Not Address1.IsValid Then
+        MsgBox "Invalid address: " & Address1.ValidationError
+        Text1.SetFocus
+        Exit Sub
+    End If
+    Text1.Text = Address1.Address
+End Sub</PRE>
+</FONT></UL>
+
+
+<P>Another example would be a batch processing program.  Let's say we want to pick the address parts out of addresses in one table's one-field address to put them in another's multi-field address.  Provided we have two recordsets, <TT>rsSource</TT> and <TT>rsDestination</TT>, here's what we might do for the current record:
+
+<UL><FONT COLOR="#006600">
+<PRE>Address1.Address = rsSource("Billing_Address")
+If Address1.IsValid Then
+    rsDestination("BAStreet1") = Address1.StreetLine1
+    rsDestination("BAStreet2") = Address1.StreetLine2
+    rsDestination("BACity") = Address1.City
+    rsDestination("BAState") = Address1.State
+    rsDestination("BAZip") = Address1.Zip
+    rsDestination("BAZipExten") = Address1.Zip4
+End If</PRE>
+</FONT></UL>
+
+<P>While not a pure superset of the TextBox control, the PostalAddress control offers many of the same public properties and events that it offers.  You could change the font, set the background color, programmatically control which characters are highlighted using <TT>.SelStart</TT> and <TT>.SelLength</TT>, or alter a number of other properties.  You can even trap mouse and keyboard events.  One property that's unfortunate in its operation is <TT>.ToolTipText</TT>.  For technical reasons, you can set this at design time using VB's properties window, but not effectively at run-time.
+
+
+<A NAME="declarations">
+<P><FONT SIZE="+2" COLOR="#000099"><B> Public Declarations </B></FONT>
+<BR>The PostalAddress control offers the following public declarations:
+
+<P>
+<A HREF="#declaration_ValidationErrors">ValidationErrors</A>
+
+
+<A NAME="declaration_ValidationErrors">
+<P><FONT SIZE="+1" COLOR="#006699"><B> ValidationErrors </B></FONT>
+<BR><TT> Public ValidationErrors As Variant</TT>
+<BR>This is an array containing the complete list of error codes and their messages, which are
+used to populate <TT><A HREF="#property_ValidationError">.ValidationError</A></TT>.  
+<TT><A HREF="#property_ValidationErrorCode">.ValidationErrorCode.</A></TT> will contain an
+index to this array.  Those list items that include ???? in them
+will have error-specific information in place of ???? when they
+are used to populate <TT><A HREF="#property_ValidationError">.ValidationError</A></TT>.
+User code may alter the contents of this array to provide custom error messages.
+
+
+<A NAME="properties">
+<P><FONT SIZE="+2" COLOR="#000099"><B> Public Properties </B></FONT>
+<BR>In addition to the properties implicitly available through Visual Basic, like <TT>.Height</TT> and <TT>.TabIndex</TT>, the PostalAddress control explicitly offers a number of publicly available properties:
+
+<P>
+<A HREF="#property_Address">Address</A> |
+<A HREF="#property_standard">BackColor</A> |
+<A HREF="#property_standard">BorderStyle</A> |
+<A HREF="#property_City">City</A> |
+<A HREF="#property_standard">Enabled</A> |
+<A HREF="#property_standard">Font</A> |
+<A HREF="#property_standard">ForeColor</A> |
+<A HREF="#property_IsEmpty">IsEmpty</A> |
+<A HREF="#property_IsValid">IsValid</A> |
+<A HREF="#property_RawText">RawText</A> |
+<A HREF="#property_standard">SelLength</A> |
+<A HREF="#property_standard">SelStart</A> |
+<A HREF="#property_standard">SelText</A> |
+<A HREF="#property_State">State</A> |
+<A HREF="#property_StateCount">StateCount</A> |
+<A HREF="#property_Street">Street</A> |
+<A HREF="#property_StreetLine1">StreetLine1</A> |
+<A HREF="#property_StreetLine2">StreetLine2</A> |
+<A HREF="#property_ValidationError">ValidationError</A> |
+<A HREF="#property_ValidationErrorCode">ValidationErrorCode</A> |
+<A HREF="#property_Zip">Zip</A> |
+<A HREF="#property_Zip4">Zip4</A>
+
+
+<A NAME="property_IsValid">
+<P><FONT SIZE="+1" COLOR="#006699"><B> IsValid </B></FONT>
+<BR><I> Read-Only, Boolean </I>
+<BR>This indicates whether or not the control considers the address to
+have a valid format and a recognized state code.  Since one's own
+program may have other validation rules (such as maximum length for
+the city name), these might best be implemented by checking the
+relevant data properties (e.g., <TT><FONT COLOR="#006600">Len(PostalAddress1.City) <= 20</FONT></TT> )
+
+<A NAME="property_IsEmpty">
+<P><FONT SIZE="+1" COLOR="#006699"><B> IsEmpty </B></FONT>
+<BR><I> Read-Only, Boolean </I>
+<BR>This address may be optional in your application.  This property
+identifies whether or not this control has any data in it at all.
+It does this by simply seeing if all the publicly-available data
+properties are blank.
+
+<A NAME="property_Address">
+<P><FONT SIZE="+1" COLOR="#006699"><B> Address </B></FONT>
+<BR><I> Read / Write, String </I>
+<BR>The parsed and reassembled address.  While it may look like the
+same thing that the user typed into the text box, it is not
+necessarily so.  It is instead constructed using the parsed-out
+basic parts of the address.  Setting this property causes the
+text box to be populated verbatim and that to then be parsed.
+New-line character combinations (<TT>&lt;CR&gt;&lt;LF&gt;</TT>) separate the two or
+three lines.
+
+<A NAME="property_StreetLine1">
+<P><FONT SIZE="+1" COLOR="#006699"><B> StreetLine1 </B></FONT>
+<BR><I> Read / Write, String </I>
+<BR>The first of at least one and at most two lines representing
+the building number, street name, and any addition stuff like
+suite number.
+
+<A NAME="property_StreetLine2">
+<P><FONT SIZE="+1" COLOR="#006699"><B> StreetLine2 </B></FONT>
+<BR><I> Read / Write, String </I>
+<BR>The optional line two of the street address.  If there is no
+line two, this will be blank.  See <TT><A HREF="#property_StreetLine1">.StreetLine1</A></TT> for more.
+
+<A NAME="property_Street">
+<P><FONT SIZE="+1" COLOR="#006699"><B> Street </B></FONT>
+<BR><I> Read / Write, String </I>
+<BR>The simple combination of street address lines one and two,
+with a new-line character combination (<TT>&lt;CR&gt;&lt;LF&gt;</TT>) between them if there
+is a second line.
+
+<A NAME="property_City">
+<P><FONT SIZE="+1" COLOR="#006699"><B> City </B></FONT>
+<BR><I> Read / Write, String </I>
+<BR>The city, which is basically everything in the text box before
+the state (usually, but not necessarily, followed by a comma
+before the state).
+
+<A NAME="property_State">
+<P><FONT SIZE="+1" COLOR="#006699"><B> State </B></FONT>
+<BR><I> Read / Write, String </I>
+<BR>The two-character state code (e.g., "AK").
+
+<A NAME="property_StateCount">
+<P><FONT SIZE="+1" COLOR="#006699"><B> StateCount </B></FONT>
+<BR><I> Read, Integer </I>
+<BR>The number of states in the internal list.
+
+<A NAME="property_Zip">
+<P><FONT SIZE="+1" COLOR="#006699"><B> Zip </B></FONT>
+<BR><I> Read / Write, String </I>
+<BR>The first (or only) five digits of the ZIP code.
+
+<A NAME="property_Zip4">
+<P><FONT SIZE="+1" COLOR="#006699"><B> Zip4 </B></FONT>
+<BR><I> Read / Write, String </I>
+<BR>If the zip code is an extended one, this will be the four
+digits following the first and the dash (e.g., "62542-7311", where "7311" is what <TT>.Zip4</TT> containts).
+
+<A NAME="property_ValidationError">
+<P><FONT SIZE="+1" COLOR="#006699"><B> ValidationError </B></FONT>
+<BR><I> Read-Only, String </I>
+<BR>If <TT><A HREF="#property_IsValid">.IsValid</A> = False</TT>, this contains a terse explanation of
+what's most obviously wrong with the address.  See the
+<TT><A HREF="#declaration_ValidationErrors">.ValidationErrors</A></TT> 
+array declaration for the list of errors.
+
+<A NAME="property_ValidationErrorCode">
+<P><FONT SIZE="+1" COLOR="#006699"><B> ValidationErrorCode </B></FONT>
+<BR><I> Read-Only, Integer </I>
+<BR>This contains the index of the error in the <TT><A HREF="#declaration_ValidationErrors">.ValidationErrors</A></TT> array or -1 if <TT><A HREF="#property_IsValid">.IsValid</A> = False</TT>.
+
+<A NAME="property_RawText">
+<P><FONT SIZE="+1" COLOR="#006699"><B> RawText </B></FONT>
+<BR><I> Read / Write, String </I>
+<BR>While .Address provides the "real" address, this allows the
+containing program to see what's actually in the text box.
+
+<A NAME="property_standard">
+<P><FONT SIZE="+1" COLOR="#006699"><B> (Standard Properties) </B></FONT>
+<BR>The following properties have meanings essentially identical to those offered by the standard TextBox control.  Please review VB's help for details.
+
+<UL>
+  <LI>BackColor
+  <LI>BorderStyle
+  <LI>Enabled
+  <LI>Font
+  <LI>ForeColor
+  <LI>SelLength
+  <LI>SelStart
+  <LI>SelText
+</UL>
+
+
+<A NAME="methods">
+<P><FONT SIZE="+2" COLOR="#000099"><B> Public Methods </B></FONT>
+<BR>In addition to the methods implicitly available through Visual Basic, like <TT>.SetFocus</TT> and <TT>.Move</TT>, the PostalAddress control explicitly offers a number of publicly available methods:
+
+<P>
+<A HREF="#method_AddState">AddState</A> |
+<A HREF="#method_Clear">Clear</A> |
+<A HREF="#method_ClearStates">ClearStates</A> |
+<A HREF="#method_FindStateByAbbreviation">FindStateByAbbreviation</A> |
+<A HREF="#method_FindStateByName">FindStateByName</A> |
+<A HREF="#method_Populate">Populate</A> |
+<A HREF="#method_StateAbbreviation">StateAbbreviation</A> |
+<A HREF="#method_StateName">StateName</A>
+
+
+<A NAME="method_Clear">
+<P><FONT SIZE="+1" COLOR="#006699"><B> Clear </B></FONT>
+<BR><TT> Sub Clear() </TT>
+<P>Clear the text box and thus all basic data properties (e.g.,
+City).  Since this forces validation like any other changing
+of the text box's contents, <TT><A HREF="#property_IsValid">.IsValid</A></TT> will be False and the
+validation error will have an appropriate message.
+
+<A NAME="method_Populate">
+<P><FONT SIZE="+1" COLOR="#006699"><B> Populate </B></FONT>
+<BR><TT> Sub Populate(ByVal StreetLine1 As String, ByVal StreetLine2 As String, ByVal City As String, ByVal State As String, ByVal Zip As String, ByVal Zip4 As String) </TT>
+<P>Populate all the data properties in one step.  This is simple, but
+it also helps to avoid strange problems that can happen during
+the refresh that follows setting one of the properties when the
+address is invalid.
+
+
+<A NAME="method_ClearStates">
+<P><FONT SIZE="+1" COLOR="#006699"><B> ClearStates </B></FONT>
+<BR><TT> Sub ClearStates() </TT>
+<P>Clear out the lists of state abbreviations and names to make way
+for new ones using <TT><A HREF="#method_AddState">.AddState()</A></TT>.
+
+<A NAME="method_AddState">
+<P><FONT SIZE="+1" COLOR="#006699"><B> AddState </B></FONT>
+<BR><TT> Sub AddState(ByVal Abbreviation As String, Name As String) </TT>
+<P>Add a state to the end of the internal list.
+
+<A NAME="method_StateAbbreviation">
+<P><FONT SIZE="+1" COLOR="#006699"><B> StateAbbreviation </B></FONT>
+<BR><TT> Function StateAbbreviation(ByVal Index As Integer) As String </TT>
+<P>Identify the state abbreviation associated with the specified
+list index.  Since the list is zero-based, the index must be
+in the range 0 to <TT><A HREF="#property_StateCount">.StateCount</A></TT> - 1.
+
+<A NAME="method_StateName">
+<P><FONT SIZE="+1" COLOR="#006699"><B> StateName </B></FONT>
+<BR><TT> Function StateName(ByVal Abbreviation As String) As String </TT>
+<P>Identify the name of the state associated with the abbreviation.
+A typical use of this is:
+<UL>
+<PRE>X = PostalAddress.StateName(PostalAddress.State)</PRE>
+</UL>
+
+<A NAME="method_FindStateByAbbreviation">
+<P><FONT SIZE="+1" COLOR="#006699"><B> FindStateByAbbreviation </B></FONT>
+<BR><TT> Function FindStateByAbbreviation(ByVal Abbreviation As String) As Integer </TT>
+<P>Returns the zero-based list index of the specified state, if
+found.  Returns -1 if not found.
+
+<A NAME="method_FindStateByName">
+<P><FONT SIZE="+1" COLOR="#006699"><B> FindStateByName </B></FONT>
+<BR><TT> Function FindStateByName(ByVal Name As String) As Integer </TT>
+<P>Returns the zero-based list index of the specified state, if
+found.  Returns -1 if not found.
+
+
+<A NAME="events">
+<P><FONT SIZE="+2" COLOR="#000099"><B> Public Events </B></FONT>
+<BR>The PostalAddress control raises a subset of the standard events the TextBox control raises.  Please refer to VB's documentation for more information.  In addition to these, a number of others are automatically raised, like <TT>LostFocus()</TT>.  These are the events explicitly supported:
+
+<TT><UL>
+  <LI>Change()
+  <LI>Click()
+  <LI>DblClick()
+  <LI>KeyDown(KeyCode As Integer, Shift As Integer)
+  <LI>KeyPress(KeyAscii As Integer)
+  <LI>KeyUp(KeyCode As Integer, Shift As Integer)
+  <LI>MouseDown(Button As Integer, Shift As Integer, X As Single, Y As Single)
+  <LI>MouseMove(Button As Integer, Shift As Integer, X As Single, Y As Single)
+  <LI>MouseUp(Button As Integer, Shift As Integer, X As Single, Y As Single)
+</UL></TT>
+
+
+<A NAME="revisions">
+<P><FONT SIZE="+2" COLOR="#000099"><B> Revision History </B></FONT>
+
+<P><FONT SIZE="+1" COLOR="#006699"><B> PostalAddress 1.0 </B></FONT>
+<BR><I> Released 17 May 2000 </I>
+<BR>Initial release
+
+<P><FONT SIZE="+1" COLOR="#006699"><B> PostalAddress 1.1 </B></FONT>
+<BR><I> Released 22 May 2000 </I>
+<BR>Updated parser engine to accommodate many more bad or incomplete address formats.  Also added <TT><A HREF="#declaration_ValidationErrors">.ValidationErrors</A></TT> public array and <TT><A HREF="#property_ValidationErrorCode">.ValidationErrorCode</A></TT> property.
+
+
+
+<A NAME="credits">
+<P><FONT SIZE="+2" COLOR="#000099"><B> Credits </B></FONT>
+<BR>Versions 1.0 - 1.1 of the PostalAddress control was created by <B><A HREF="http://alexandria.nu/user/jcarnicelli/">James Vincent Carnicelli</A></B>.  Documentation was prepared by same.
+
+
+</FONT></BODY>
+</HTML>
